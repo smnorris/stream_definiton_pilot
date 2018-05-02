@@ -135,16 +135,28 @@ cp ../dem/nv.tif nv.tif
 mpiexec -n 2 pitremove nv.tif 
 
 # run d-8 flow model
+# (approximately 1h24min to run using dual core 2.8GHz laptop with 16G RAM)
 mpiexec -n 2 d8flowdir -p nvp.tif -sd8 nvsd8.tif -fel nvfel.tif
 
 # calculate the contributing area (do not check for edge contamination)
 mpiexec -n 2 aread8 -p nvp.tif -ad8 nvad8.tif -nc
 
 # create stream raster with 1000 threshold
-mpiexec -n 2 threshold -ssa nvssa.tif -src nvsrc.tif -thresh 1000
+mpiexec -n 2 threshold -ssa nvad8.tif -src nvsrc.tif -thresh 1000
 
-# export streams to shape (along with watersheds)
-mpiexec -n 2 streamnet -fel nvfel.tif -p nvp.tif -ad8 nvad8.tif -src nvsrc.tif -ord nvord3.tif -tree nvtree.dat -coord nvcoord.dat -net nvnet.shp -w nvw.tif 
+# export streams to shape 
+# Note that this creates watersheds as well
+mpiexec \
+  -n 2 streamnet \
+  -fel nvfel.tif \
+  -p nvp.tif \
+  -ad8 nvad8.tif \
+  -src nvsrc.tif \
+  -ord nvord3.tif \
+  -tree nvtree.dat \
+  -coord nvcoord.dat \
+  -net nvnet.shp \
+  -w nvw.tif
 ```
 
 Other available commands from quickstart:
