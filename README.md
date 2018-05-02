@@ -41,38 +41,41 @@ Band 1 Block=14542x1 Type=Float32, ColorInterp=Undefined
   Overviews: 7271x5559, 3636x2780, 1818x1390, 909x695, 455x348, 228x174
 ```
 
-### preprocess the DEM
+### Preprocess DEM
 
-- create `dem` folder in project folder and copy provided DEM files to `dem/test.asc`
-- round and convert to integer
-    
-        rio calc "(round (* 10 (read 1)))" test.asc test_round.tif
-        gdal_translate -of "GTiff" -co "COMPRESS=LZW" -ot int16 test_round.tif test_int.tif
+Requirements:
+- gdal
+- rasterio
+- fiona
+- Python 3
 
-- set ocean, lakes/reservoirs to nodata:
-        
-        # export waterbodies to geojson
-        ogr2ogr -f GeoJSON \
-          -t_srs EPSG:26910 \
-          waterbodies.json \
-          PG:"host=localhost user=postgres dbname=postgis password=postgres"\
-          -sql "SELECT
-                  waterbody_poly_id,
-                  geom
-                FROM whse_basemapping.fwa_lakes_poly
-                WHERE watershed_group_code = 'SQAM'
-                UNION ALL
-                SELECT
-                  waterbody_poly_id,
-                  geom
-                FROM whse_basemapping.fwa_manmade_waterbodies_poly
-                WHERE watershed_group_code = 'SQAM'"
+First, create `dem` folder in project folder and copy provided DEM file to `dem/test.asc`, then run the preprocessing to simplify the DEM and set waterbodies to NODATA:
 
-        # rasterize the polys
-        rio rasterize waterbodies.tif --like test_int.tif < waterbodies.json
+```        
+$ cd dem
+$ ../scripts/preprocess_dem.sh
+```
 
-        # set these areas to nodata
-        python3 ../scripts/waterbodies2nodata.py
+
+### Create outlets/pour points
+
+Requirements:
+- gdal
+- postgresql/postgis
+- `fwakit` and FWA data for `SQAM` watershed group
+
+Generate points at:
+- FWA stream confluences
+- intersections of FWA streams with lakes, reservoirs and ocean (at the point where the stream flows into the waterbody)
+
+From our root project folder:
+
+```
+$ mkdir outlets
+$ cd outlets
+$ ../scripts/create_outlets.sh
+```
+
 
 ## TauDEM
 
