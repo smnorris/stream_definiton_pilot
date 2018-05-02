@@ -59,6 +59,8 @@ $ ../scripts/preprocess_dem.sh
 
 ### Create outlets/pour points
 
+(not needed for generating streams)
+
 Requirements:
 - gdal
 - postgresql/postgis
@@ -120,38 +122,53 @@ make && make install
 
 ### Usage
 
+Create a stream network from the D8 flow model and contributing area, with 1000 as the minimum contributing area:
 
 ```
 mkdir taudem
 cd taudem
 
+# make a copy of the preprocessed dem in the taudem folder
 cp ../dem/nv.tif nv.tif
 
+# fill in depressions/pits
 mpiexec -n 2 pitremove nv.tif 
 
-# dinf flow model
+# run d-8 flow model
+mpiexec -n 2 d8flowdir -p nvp.tif -sd8 nvsd8.tif -fel nvfel.tif
+
+# calculate the contributing area (do not check for edge contamination)
+mpiexec -n 2 aread8 -p nvp.tif -ad8 nvad8.tif -nc
+
+# create stream raster with 1000 threshold
+mpiexec -n 2 threshold -ssa nvssa.tif -src nvsrc.tif -thresh 1000
+
+# export streams to shape (along with watersheds)
+mpiexec -n 2 streamnet -fel nvfel.tif -p nvp.tif -ad8 nvad8.tif -src nvsrc.tif -ord nvord3.tif -tree nvtree.dat -coord nvcoord.dat -net nvnet.shp -w nvw.tif 
+```
+
+Other available commands from quickstart:
+```
+# run gridnet, producing:
+# (1) the longest flow path along D8 flow directions to each grid cell
+# (2) the total length of all flow paths that end at each grid cell
+# (3) the grid network order
+mpiexec -n 2 gridnet -p nvp.tif -plen nvplen.tif -tlen nvtlen.tif -gord nvgord.tif
+
+# run peukerdoglas, producing a skeleton of a stream network derived entirely 
+# from a local filter applied to the topography
+mpiexec -n 2 peukerdouglas -fel nvfel.tif -ss nvss.tif 
+
+# run d-infinity flow model (just as a test, we don't use this)
 mpiexec -n 2 dinfflowdir -ang nvang.tif -slp nvslp.tif -fel nvfel.tif
 mpiexec -n 2 areadinf -ang nvang.tif -sca nvsca.tif
 
-# d8 flow model
-mpiexec -n 2 d8flowdir -p nvp.tif -sd8 nvsd8.tif -fel nvfel.tif
-mpiexec -n 2 aread8 -p nvp.tif -ad8 nvad8.tif -nc
-
-mpiexec -n 2 gridnet -p nvp.tif -plen nvplen.tif -tlen nvtlen.tif -gord nvgord.tif
-
-mpiexec -n 2 peukerdouglas -fel nvfel.tif -ss nvss.tif 
-
-# add flag for not checking edge contamination
+# run d-8 contrib area with peukderdouglas streams as a weighting factor
+# - adding flag for not checking edge contamination
+# - using streams from peukerdouglas as a weight
 mpiexec -n 2 aread8 -p nvp.tif -ad8 nvssa.tif -wg nvss.tif -nc
 
-# to make sure we only use outlet points that have DEM data,
-# add elevation to the output shape
-# (manually filtered points with no elevation)
-fio cat outlets.shp | rio pointquery -r nv.tif | fio load t_outlets.shp --driver Shapefile
-
-# this should also work?
-# ogr2ogr outlets2.shp t_outlets.shp -where "value is not null"
-
+# move outlets to streams
 MoveOutletsToStrm -p nvp.tif -src nvsrc.tif -o t_outlets.shp -om outletsmoved.shp
 
 # this command bails with segfault
@@ -163,11 +180,6 @@ dropanalysis \
   -drp nvdrp.txt \
   -o outletsmoved.shp \
   -par 5 500 10 0
-
-
-mpiexec -n 2 threshold -ssa nvssa.tif -src nvsrc.tif -thresh 300
-
-mpiexec -n 2 streamnet -fel nvfel.tif -p nvp.tif -ad8 nvad8.tif -src nvsrc.tif -ord nvord3.tif -tree nvtree.dat -coord nvcoord.dat -net nvnet.shp -w nvw.tif 
 
 ```
 

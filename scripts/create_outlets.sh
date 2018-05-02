@@ -1,7 +1,7 @@
 ogr2ogr \
   -s_srs EPSG:3005 \
   -t_srs EPSG:26910 \
-  outlets.shp \
+  outlets_sqam.shp \
   PG:"host=localhost user=postgres dbname=postgis password=postgres"\
   -sql "WITH waterbody_inlets AS
 (
@@ -38,3 +38,12 @@ FROM
 UNION ALL
 SELECT * FROM confluences) as foo"
 
+# to make sure we only use outlet points that have DEM data,
+# add elevation to the output points
+fio cat outlets_sqam.shp | rio pointquery -r ../dem/nv.tif | fio load temp.shp --driver Shapefile
+
+# then dump to outlets_nv, all outlets where there is a value for elevation
+ogr2ogr outlets_nv.shp temp.shp -where "value is not null"
+
+# delete temp shapefile
+../scripts/rmshp temp.shp
